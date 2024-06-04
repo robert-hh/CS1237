@@ -49,6 +49,9 @@ class CS1237:
         self.clock.init(mode=Pin.OUT)
         self.clock(0)
         self.init(gain, rate, channel)
+        # pre-set some values for temperure calibration.
+        self.ref_value = 769000
+        self.ref_temp = 20
 
     def __write_bit(self, value):
         self.clock(1)
@@ -109,7 +112,7 @@ class CS1237:
         self.__flag_ready = True
         pin.irq(handler=None)
 
-    def read_value(self):
+    def read(self):
         self.data.init(mode=Pin.IN)
         # set up the trigger for the conversion done signal.
         self.__flag_ready = False
@@ -133,16 +136,16 @@ class CS1237:
         return result
 
     def set_config(self):
-        self.read_value()  ## dummy read value
+        self.read()  ## dummy read value
         self.__write_config(self.rate << 4 | self.gain << 2 | self.channel)
 
     def get_config(self):
-        self.read_value()  ## dummy read value
+        self.read()  ## dummy read value
         config = self.__read_config()
         return (config >> 2 & 0x03, config >> 4 & 0x03, config & 0x03)
 
     def config_status(self):
-        self.read_value()  ## dummy read value
+        self.read()  ## dummy read value
         return self.__write_status() >> 1
 
     def init(self, gain=None, rate=None, channel=None):
@@ -162,6 +165,13 @@ class CS1237:
 
     def is_ready(self):
         return self.data() == 0
+
+    def calibrate_temperature(self, temp):
+        self.ref_value = self.read()
+        self.ref_temp = temp
+
+    def temperature(self):
+        return self.read()/self.ref_value * (273.15 + self.ref_temp) - 273.15
 
     def power_down(self):
         self.clock(0)

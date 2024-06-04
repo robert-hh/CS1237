@@ -18,7 +18,7 @@ Configures or re-configures the ADC. All arguments are optional. The
 class constants to be used for gain, rate and channel are shown below.
 
 
-### result = cs1237.read_value()
+### result = cs1237.read()
 
 Returns the actual reading of the ADC or temperature.
 
@@ -32,6 +32,17 @@ Returns the tuple of (gain, rate, channel) as read back from the ADC.
 
 Returns True if a new configuration has been properly updated.
 
+### cs1237.calibrate_temperature(temp)
+
+Set the caibration values for the temerature sensor. temp is the actual
+°C value. The device has first to be configured for temperature reading.
+
+### cs1237.temperature(temp)
+
+Return the actual temperature reading. The reference point has to be
+configured before using calibrate_temperature().
+The device has first to be configured for temperature reading.
+
 ### cs1237.power_down()
 
 Set the load cell to sleep mode.
@@ -42,7 +53,7 @@ Switch the load cell on again.
 
 ### cs1237.is_read()
 
-Tells whether a value can be obtained using cs1237.read_value()
+Tells whether a value can be obtained using cs1237.read()
 
 
 More methods exists but are used only internally by the CS1237 class.
@@ -82,10 +93,19 @@ clock = Pin(13)
 # Create a CS1237 instance with default values for gain, rate and channel
 cs1237 = CS1237(clock, data)
 
-value = cs1237.read_value()
+value = cs1237.read()
 
 cs1237.init(gain=cs1237.GAIN_64)
-value = cs1237.read_value()
+value = cs1237.read()
 
 gain, rate, channel = cs1237.get_config()
+
+
+cs1237.init(gain=cs1237.GAIN_1, rate=cs1237.RATE_10, channel=cs1237.CHANNEL_TEMP)
+cs1237.calibrate_temperature(22.1)
+
+
+cs1237.init(gain=cs1237.GAIN_1, rate=cs1237.RATE_10, channel=cs1237.CHANNEL_TEMP)
+temp_celsius = cs1237.temperature()
+
 ```
