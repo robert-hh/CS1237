@@ -31,7 +31,7 @@ class CS1237:
 
     _gain = {
         1 : 0,
-        2 : 1, 
+        2 : 1,
         64 : 2,
         128 : 3
     }
@@ -46,30 +46,30 @@ class CS1237:
     def __init__(self, clock, data, gain=64, rate=10, channel=0, delay_us=1):
         self.clock = clock
         self.data = data
-        self.delay_us = delay_us
+        self.delay_us = delay_us if 0 < delay_us < 10 else 1
         self.clock.init(mode=Pin.OUT)
         self.clock(0)
         self.init(gain, rate, channel)
-        # pre-set some values for temperure calibration.
+        # pre-set some values for temperature calibration.
         self.ref_value = 769000
         self.ref_temp = 20
 
     def __repr__(self):
-        print("CS1237(gain={}, rate={}, channel={})".format(*self.get_config()))
-        return ""
+        return "CS1237(gain={}, rate={}, channel={})".format(*self.get_config())
+
+    def __call__(self):
+        return self.read()
 
     def __write_bit(self, value):
         self.clock(1)
         time.sleep_us(self.delay_us)
         self.data(value)
         self.clock(0)
-        time.sleep_us(self.delay_us)
 
     def __read_bit(self):
         self.clock(1)
         time.sleep_us(self.delay_us)
         self.clock(0)
-        time.sleep_us(self.delay_us)
         return self.data()
 
     def __write_status(self):
@@ -93,6 +93,7 @@ class CS1237:
         self.__write_bit(1)
 
     def __write_config(self, config):
+        value = self.read()  # read value
         self.__write_cmd(_CMD_WRITE)
         # write the configuration byte
         for j in range(8):
@@ -101,8 +102,11 @@ class CS1237:
         # wait one clock cycle
         self.data.init(mode=Pin.IN)
         self.__read_bit()
+        time.sleep_ms(100)
+        return value
 
     def __read_config(self):
+        value = self.read()  # read value
         self.__write_cmd(_CMD_READ)
         self.data.init(mode=Pin.IN)
         config = 0
@@ -111,7 +115,7 @@ class CS1237:
             config = (config << 1) | self.__read_bit()
         # wait one clock cycle
         self.__read_bit()
-        return config
+        return config, value
 
     def __data_ready_cb(self, pin):
         self.__flag_ready = True
@@ -123,10 +127,10 @@ class CS1237:
         self.__flag_ready = False
         self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__data_ready_cb)
         # wait for the device being ready
-        for _ in range(200):
+        for _ in range(1000):
             if self.__flag_ready == True:
                 break
-            time.sleep_ms(1)
+            time.sleep_us(200)
         else:
             self.data.irq(handler=None)
             raise OSError("Sensor does not respond")
@@ -141,8 +145,7 @@ class CS1237:
         return result
 
     def get_config(self):
-        self.read()  ## dummy read value
-        config = self.__read_config()
+        config, _ = self.__read_config()
         return (
             { value:key  for key,value in self._gain.items() }[config >> 2 & 0x03],
             { value:key  for key,value in self._rate.items() }[config >> 4 & 0x03],
@@ -166,21 +169,28 @@ class CS1237:
             if not 0 <= channel <= 3:
                 raise ValueError("Invalid channel")
             self.channel = channel
-        self.read()  ## dummy read value
         self.__write_config(self.rate << 4 | self.gain << 2 | self.channel)
-
-    def is_ready(self):
-        return self.data() == 0
 
     def calibrate_temperature(self, temp, ref_value=None):
         self.ref_temp = temp
         if ref_value is None:
-            self.ref_value = self.read()
+            config, self.ref_value = self.__read_config()
+            if config != 0x02:
+                # Set gain=1, rate=10, channel=2 (temperature)
+                self.__write_config(0x02)
+                # Read the value and restore the previous configuration
+                self.ref_value = self.__write_config(config)
         else:
             self.ref_value = ref_value
 
     def temperature(self):
-        return self.read()/self.ref_value * (273.15 + self.ref_temp) - 273.15
+        config, value = self.__read_config()
+        if config != 0x02:
+            # set gain=1, rate=10, channel=2 (temperature)
+            self.__write_config(0x02)
+            # Read the value and restore the previous configuration
+            value = self.__write_config(config)
+        return value/self.ref_value * (273.15 + self.ref_temp) - 273.15
 
     def power_down(self):
         self.clock(0)
