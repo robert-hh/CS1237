@@ -29,20 +29,21 @@ _CMD_WRITE = const(0x65)
 
 class CS1237:
 
-    GAIN_1 = 0
-    GAIN_2 = 1
-    GAIN_64 = 2
-    GAIN_128 = 3
+    _gain = {
+        1 : 0,
+        2 : 1, 
+        64 : 2,
+        128 : 3
+    }
 
-    RATE_10 = 0
-    RATE_40 = 1
-    RATE_640 = 2
-    RATE_1280 = 3
+    _rate = {
+        10 : 0,
+        40 : 1,
+        640 : 2,
+        1280 : 3
+    }
 
-    CHANNEL_A = 0
-    CHANNEL_TEMP = 2
-
-    def __init__(self, clock, data, gain=GAIN_1, rate=RATE_40, channel=CHANNEL_A, delay_us=1):
+    def __init__(self, clock, data, gain=64, rate=10, channel=0, delay_us=1):
         self.clock = clock
         self.data = data
         self.delay_us = delay_us
@@ -52,6 +53,10 @@ class CS1237:
         # pre-set some values for temperure calibration.
         self.ref_value = 769000
         self.ref_temp = 20
+
+    def __repr__(self):
+        print("CS1237(gain={}, rate={}, channel={})".format(*self.get_config()))
+        return ""
 
     def __write_bit(self, value):
         self.clock(1)
@@ -135,14 +140,14 @@ class CS1237:
 
         return result
 
-    def set_config(self):
-        self.read()  ## dummy read value
-        self.__write_config(self.rate << 4 | self.gain << 2 | self.channel)
-
     def get_config(self):
         self.read()  ## dummy read value
         config = self.__read_config()
-        return (config >> 2 & 0x03, config >> 4 & 0x03, config & 0x03)
+        return (
+            { value:key  for key,value in self._gain.items() }[config >> 2 & 0x03],
+            { value:key  for key,value in self._rate.items() }[config >> 4 & 0x03],
+            config & 0x03
+        )
 
     def config_status(self):
         self.read()  ## dummy read value
@@ -150,25 +155,29 @@ class CS1237:
 
     def init(self, gain=None, rate=None, channel=None):
         if gain is not None:
-            if gain not in (self.GAIN_1, self.GAIN_2, self.GAIN_64, self.GAIN_128):
+            if gain not in self._gain.keys():
                 raise ValueError("Invalid Gain")
-            self.gain = gain
+            self.gain = self._gain[gain]
         if rate is not None:
-            if rate not in (self.RATE_10, self.RATE_40, self.RATE_640, self.RATE_1280):
+            if rate not in self._rate.keys():
                 raise ValueError("Invalid rate")
-            self.rate = rate
+            self.rate = self._rate[rate]
         if channel is not None:
-            if channel not in (self.CHANNEL_A, self.CHANNEL_TEMP):
+            if not 0 <= channel <= 3:
                 raise ValueError("Invalid channel")
             self.channel = channel
-        self.set_config()
+        self.read()  ## dummy read value
+        self.__write_config(self.rate << 4 | self.gain << 2 | self.channel)
 
     def is_ready(self):
         return self.data() == 0
 
-    def calibrate_temperature(self, temp):
-        self.ref_value = self.read()
+    def calibrate_temperature(self, temp, ref_value=None):
         self.ref_temp = temp
+        if ref_value is None:
+            self.ref_value = self.read()
+        else:
+            self.ref_value = ref_value
 
     def temperature(self):
         return self.read()/self.ref_value * (273.15 + self.ref_temp) - 273.15
