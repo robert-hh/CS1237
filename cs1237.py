@@ -43,10 +43,10 @@ class CS1237:
         1280 : 3
     }
 
-    def __init__(self, clock, data, gain=64, rate=10, channel=0, delay_us=1):
+    def __init__(self, clock, data, gain=64, rate=10, channel=0):
         self.clock = clock
         self.data = data
-        self.delay_us = delay_us if 0 < delay_us < 10 else 1
+        self.data.init(mode=Pin.IN)
         self.clock.init(mode=Pin.OUT)
         self.clock(0)
         self.init(gain, rate, channel)
@@ -62,13 +62,13 @@ class CS1237:
 
     def __write_bit(self, value):
         self.clock(1)
-        time.sleep_us(self.delay_us)
-        self.data(value)
+        self.data(1 if value != 0 else 0)
         self.clock(0)
 
     def __read_bit(self):
+        # duplicate the clock high call to extend the positive pulse
         self.clock(1)
-        time.sleep_us(self.delay_us)
+        self.clock(1)
         self.clock(0)
         return self.data()
 
@@ -87,7 +87,7 @@ class CS1237:
         # write the command word
         self.data.init(mode=Pin.OUT)
         for j in range(7):
-            self.__write_bit((cmd & 0x40) != 0)
+            self.__write_bit(cmd & 0x40)
             cmd <<= 1
         # write gap bit 37
         self.__write_bit(1)
@@ -97,7 +97,7 @@ class CS1237:
         self.__write_cmd(_CMD_WRITE)
         # write the configuration byte
         for j in range(8):
-            self.__write_bit((config & 0x80) != 0)
+            self.__write_bit(config & 0x80)
             config <<= 1
         # wait one clock cycle
         self.data.init(mode=Pin.IN)
@@ -117,32 +117,41 @@ class CS1237:
         self.__read_bit()
         return config, value
 
-    def __data_ready_cb(self, pin):
-        self.__flag_ready = True
-        pin.irq(handler=None)
+    # For best performace do not use __read_bit() here and use
+    # local copies of the clock and data pin objects.
+    def __read_cb(self, data):
+        if self.__do_sample:
+            self.data.irq(handler=None)
+            clock = self.clock
+            result = 0
+            for j in range(24):
+                # duplicate the clock high call to extend the positive pulse
+                clock(1)
+                clock(1)
+                clock(0)
+                # shift in data
+                result = (result << 1) | data()
+            self.__result = result
+            self.__do_sample = False
 
     def read(self):
-        self.data.init(mode=Pin.IN)
-        # set up the trigger for the conversion done signal.
-        self.__flag_ready = False
-        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__data_ready_cb)
-        # wait for the device being ready
-        for _ in range(1000):
-            if self.__flag_ready == True:
+        # set up the trigger for conversion enable.
+        self.__result = 0
+        self.__do_sample = True
+        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__read_cb)
+        # wait for the sampling being done
+        for _ in range(2000):
+            if self.__do_sample == False:
                 break
-            time.sleep_us(200)
+            time.sleep_us(100)
         else:
-            self.data.irq(handler=None)
+            self.__do_sample = False
             raise OSError("Sensor does not respond")
-        # shift in data, and gain & channel info
-        result = 0
-        for j in range(24):
-            result = (result << 1) | self.__read_bit()
-        # check sign
-        if result > 0x7fffff:
-            result -= 0x1000000
+        # check the sign.
+        if self.__result > 0x7fffff:
+            self.__result -= 0x1000000
 
-        return result
+        return self.__result
 
     def get_config(self):
         config, _ = self.__read_config()
@@ -169,6 +178,7 @@ class CS1237:
             if not 0 <= channel <= 3:
                 raise ValueError("Invalid channel")
             self.channel = channel
+        self.__do_sample = False
         self.__write_config(self.rate << 4 | self.gain << 2 | self.channel)
 
     def calibrate_temperature(self, temp, ref_value=None):

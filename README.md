@@ -1,16 +1,32 @@
-# CS1237: Python class for the CS1237 ADC
+# CS1237: MicroPython class for the CS1237 ADC
 
-This is a very short and simple class.
+This is a short and simple class for the CS1237 ADC. It supports reading
+the ADC value, reading the temperature and configuring the various device
+modes.
+
+Tested with MicroPython ports for RP2040, STM32, SAMD, i.MX RT (Teensy),
+ESP32, ESP8266 and W600. Approximate times for reading an ADC value:
+
+RP2040 at 125 MHz: 450 µs  
+PYBD SF6 at 192 MHz: 250 µs  
+Teensy 4.1 at 600 MHz: 100 µs  
+SAMD51 at 120 MHs: 450 µs  
+ESP32 at 160 MHz: 900 µs  
+ESP8266 at 80 MHz: 1.2 ms  
+W600 at 80 MHz: 900 µs  
+NRF52: 800µs.  
+
+The nrf port has the problem that the device cannot be configured. So the CS1237
+operates at it's default mode, which is gain=128, rate=10, channel=0.
+
 
 ## Constructor
 
-### cs1237 = CS1237(clock_pin, data_pin[, gain=1, rate=10, channel=0, delay_us=1])
+### cs1237 = CS1237(clock_pin, data_pin[, gain=1, rate=10, channel=0])
 
 This is the GPIO constructor. data_pin and clock_pin are the pin objects
 of the GPIO pins used for the communication. The arguments for gain, rate and channel
 are optional and can later be re-configured using the init() method.
-Using the delay_us argument the clock rate can be further slowed down.
-Usually this is not needed.
 
 ## Methods
 
@@ -26,7 +42,27 @@ Channel values are:
 - 2 : Temperature reading
 - 3 : Internal short of the input
 
+At data rates of 640 and 1280 reading with a slow MCU may return wrong
+values, and configuring the device may fail. Then only a power cycle
+will reset the device. Since the current consumption of the CS1237 is
+low, it can be supplied by a GPIO output, making power cycling easy.  
+According to the test, Teensy 4.x and PYBD SF6 work fine at a rate
+of 1280. The RP2040 and SAMD51 work fine at a rate at 640 and can still
+be configured back.  
+ESP32, ESP8266 and W600 can be configured once for a rate of 640, but cannot
+reset back to a lower rate and do not support temperature reading when set
+to the 640 rate.
+
+
+### cs1237.deinit()
+
+Stop the IRQ handler for sampling data. To restart it, call cs1237.init().
+Once the IRQ handler is stopped, attempts to read data will fail and raise
+an exception.
+
+
 ### result = cs1237.read()
+### result = cs1237()
 
 Returns the actual reading of the ADC or temperature.
 
@@ -39,6 +75,7 @@ Returns the tuple of (gain, rate, channel) as read back from the ADC.
 ### cs1237.config_status()
 
 Returns True if a new configuration has been properly updated.
+
 
 ### cs1237.calibrate_temperature(temp [, reference_value])
 
@@ -56,11 +93,12 @@ configured before using calibrate_temperature().
 
 ### cs1237.power_down()
 
-Set the load cell to sleep mode.
+Set the CS1237 device to sleep mode.
 
 ### cs1237.power_up()
 
-Switch the load cell on again.
+Switch the CS1237 on again.
+
 
 More methods exists but are used only internally by the CS1237 class.
 
