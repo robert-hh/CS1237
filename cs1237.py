@@ -28,20 +28,9 @@ _CMD_WRITE = const(0x65)
 
 
 class CS1237:
+    _gain = {1: 0, 2: 1, 64: 2, 128: 3}
 
-    _gain = {
-        1 : 0,
-        2 : 1,
-        64 : 2,
-        128 : 3
-    }
-
-    _rate = {
-        10 : 0,
-        40 : 1,
-        640 : 2,
-        1280 : 3
-    }
+    _rate = {10: 0, 40: 1, 640: 2, 1280: 3}
 
     def __init__(self, clock, data, gain=64, rate=10, channel=0):
         self.clock = clock
@@ -148,7 +137,7 @@ class CS1237:
             self.__do_sample = False
             raise OSError("Sensor does not respond")
         # check the sign.
-        if self.__result > 0x7fffff:
+        if self.__result > 0x7FFFFF:
             self.__result -= 0x1000000
 
         return self.__result
@@ -156,9 +145,9 @@ class CS1237:
     def get_config(self):
         config, _ = self.__read_config()
         return (
-            { value:key  for key,value in self._gain.items() }[config >> 2 & 0x03],
-            { value:key  for key,value in self._rate.items() }[config >> 4 & 0x03],
-            config & 0x03
+            {value: key for key, value in self._gain.items()}[config >> 2 & 0x03],
+            {value: key for key, value in self._rate.items()}[config >> 4 & 0x03],
+            config & 0x03,
         )
 
     def config_status(self):
@@ -200,7 +189,7 @@ class CS1237:
             self.__write_config(0x02)
             # Read the value and restore the previous configuration
             value = self.__write_config(config)
-        return value/self.ref_value * (273.15 + self.ref_temp) - 273.15
+        return value / self.ref_value * (273.15 + self.ref_temp) - 273.15
 
     def power_down(self):
         self.clock(0)
