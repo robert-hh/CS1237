@@ -16,8 +16,9 @@ ESP8266 at 80 MHz: 1.2 ms
 W600 at 80 MHz: 900 µs  
 NRF52: 800µs.  
 
-The nrf port has the problem that the device cannot be configured. So the CS1237
-operates at it's default mode, which is gain=128, rate=10, channel=0.
+The nrf port has the problem that the device cannot be configured when using the IRQ based driver.
+NRF52840 based devices have worked in the test using the polling driver. Otherwise
+the CS1237 operates at it's default mode, which is gain=128, rate=10, channel=0.
 
 
 ## Constructor
@@ -49,16 +50,9 @@ low, it can be supplied by a GPIO output, making power cycling easy.
 According to the test, Teensy 4.x and PYBD SF6 work fine at a rate
 of 1280. The RP2040 and SAMD51 work fine at a rate at 640 and can still
 be configured back.  
-ESP32, ESP8266 and W600 can be configured once for a rate of 640, but cannot
+ESP32, ESP8266, nrf52 and W600 can be configured once for a rate of 640, but cannot
 reset back to a lower rate and do not support temperature reading when set
 to the 640 rate.
-
-
-### cs1237.deinit()
-
-Stop the IRQ handler for sampling data. To restart it, call cs1237.init().
-Once the IRQ handler is stopped, attempts to read data will fail and raise
-an exception.
 
 
 ### result = cs1237.read()
@@ -148,3 +142,11 @@ temp_celsius = cs1237.temperature()
 cs1237.calibrate_temperature(20.0, 769000)
 
 ```
+
+## Files
+
+- **cs1237.py** CS1237 driver using Interrupts.
+- **cs1237_poll.py** CS1237 driver use polling to detect the sync pulse. The
+driver may fail on slow devices like ESP8266, SAMD21 or W600.
+- **README.md**  Documentation file.
+

@@ -38,10 +38,17 @@ class CS1237:
         self.data.init(mode=Pin.IN)
         self.clock.init(mode=Pin.OUT)
         self.clock(0)
-        self.init(gain, rate, channel)
         # pre-set some values for temperature calibration.
         self.ref_value = 769000
         self.ref_temp = 20
+        # determine the number of attempts to find the trigger pulse
+        start = time.ticks_us()
+        for _ in range(3):
+            temp = data()
+        spent = time.ticks_diff(time.ticks_us(), start)
+        self.__wait_loop = 1_500_000 // spent
+
+        self.init(gain, rate, channel)
 
     def __repr__(self):
         return "CS1237(gain={}, rate={}, channel={})".format(*self.get_config())
@@ -108,39 +115,34 @@ class CS1237:
 
     # For best performace do not use __read_bit() here and use
     # local copies of the clock and data pin objects.
-    def __read_cb(self, data):
-        if self.__do_sample:
-            self.data.irq(handler=None)
-            clock = self.clock
-            result = 0
-            for j in range(24):
-                # duplicate the clock high call to extend the positive pulse
-                clock(1)
-                clock(1)
-                clock(0)
-                # shift in data
-                result = (result << 1) | data()
-            self.__result = result
-            self.__do_sample = False
-
     def read(self):
-        # set up the trigger for conversion enable.
-        self.__result = 0
-        self.__do_sample = True
-        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__read_cb)
-        # wait for the sampling being done
+        data = self.data
+        clock = self.clock
+        # wait for the trigger pulse
+        for _ in range(self.__wait_loop):
+            if data():
+                break
+        else:
+            raise OSError("No trigger pulse found")
         for _ in range(5000):
-            if self.__do_sample == False:
+            if not data():
                 break
             time.sleep_us(100)
         else:
-            self.__do_sample = False
             raise OSError("Sensor does not respond")
+        result = 0
+        for j in range(24):
+            # duplicate the clock high call to extend the positive pulse
+            clock(1)
+            clock(1)
+            clock(0)
+            # shift in data
+            result = (result << 1) | data()
         # check the sign.
-        if self.__result > 0x7FFFFF:
-            self.__result -= 0x1000000
+        if result > 0x7FFFFF:
+            result -= 0x1000000
 
-        return self.__result
+        return result
 
     def get_config(self):
         config, _ = self.__read_config()
