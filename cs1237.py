@@ -135,6 +135,7 @@ class CS1237:
             time.sleep_us(100)
         else:
             self.__do_sample = False
+            self.data.irq(handler=None)
             raise OSError("Sensor does not respond")
         # check the sign.
         if self.__result > 0x7FFFFF:

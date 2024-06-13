@@ -4,21 +4,26 @@ This is a short and simple class for the CS1237 ADC. It supports reading
 the ADC value, reading the temperature and configuring the various device
 modes.
 
-Tested with MicroPython ports for RP2040, STM32, SAMD, i.MX RT (Teensy),
-ESP32, ESP8266 and W600. Approximate times for reading an ADC value:
+Tested with MicroPython ports for RP2040, STM32, SAMD, i.MX RT (e.g. Teensy),
+ESP32, ESP8266, NRF52840 and W600. Approximate times for reading an ADC value:
 
-RP2040 at 125 MHz: 450 µs  
-PYBD SF6 at 192 MHz: 250 µs  
-Teensy 4.1 at 600 MHz: 100 µs  
-SAMD51 at 120 MHs: 450 µs  
-ESP32 at 160 MHz: 900 µs  
-ESP8266 at 80 MHz: 1.2 ms  
-W600 at 80 MHz: 900 µs  
-NRF52: 800µs.  
+- RP2040 at 125 MHz: 450 µs  
+- PYBD SF6 at 192 MHz: 250 µs  
+- Teensy 4.1 at 600 MHz: 100 µs  
+- SAMD51 at 120 MHz: 450 µs   
+- SAMD21 at 48 MHz: 1.2 ms   
+- ESP32 at 160 MHz: 900 µs  
+- ESP8266 at 80 MHz: 1.2 ms  
+- NRF52840: 800µs.  
+- Renesas RA6M2 at 120 MHz: 600µs
+- W600 at 80 MHz: 900 µs  
 
 The nrf port has the problem that the device cannot be configured when using the IRQ based driver.
-NRF52840 based devices have worked in the test using the polling driver. Otherwise
-the CS1237 operates at it's default mode, which is gain=128, rate=10, channel=0.
+NRF52840 based devices have worked in the test
+using the polling driver. Otherwise the CS1237 operates at it's default
+mode, which is gain=128, rate=10, channel=0.
+pin.irq() seems not to work at the Renesas port, at least not with the tested EV-RA6M2 board.
+It can be configured, but refuses to work. The polling driver works.
 
 
 ## Constructor
@@ -47,12 +52,13 @@ At data rates of 640 and 1280 reading with a slow MCU may return wrong
 values, and configuring the device may fail. Then only a power cycle
 will reset the device. Since the current consumption of the CS1237 is
 low, it can be supplied by a GPIO output, making power cycling easy.  
+
 According to the test, Teensy 4.x and PYBD SF6 work fine at a rate
-of 1280. The RP2040 and SAMD51 work fine at a rate at 640 and can still
-be configured back.  
-ESP32, ESP8266, nrf52 and W600 can be configured once for a rate of 640, but cannot
-reset back to a lower rate and do not support temperature reading when set
-to the 640 rate.
+of 1280. The RP2040, SAMD51 and Renesas RA6M2 work fine at a rate at 640
+and can still be configured back.  
+ESP32, ESP8266, nrf52, SAMD21 and W600 can be configured once for a rate
+of 640, but cannot reset back to a lower rate and do not support
+temperature reading when set to the 640 rate.
 
 
 ### result = cs1237.read()
