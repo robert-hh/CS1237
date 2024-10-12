@@ -1,4 +1,4 @@
-# CS1237: MicroPython class for the CS1237 ADC
+# CS1237: MicroPython class for the CS1237 Load Cell driver/ADC
 
 This is a short and simple class for the CS1237 ADC. It supports reading
 the ADC value, reading the temperature and configuring the various device
