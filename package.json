@@ -1,0 +1,8 @@
+{
+  "urls": [
+    ["cs1237.py", "github:robert-hh/CS1237/cs1237.py"],
+    ["cs1237_poll.py", "github:robert-hh/CS1237/cs1237_poll.py"]
+  ],
+  "version": "1.0.0",
+  "deps": []
+}
