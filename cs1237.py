@@ -29,7 +29,6 @@ _CMD_WRITE = const(0x65)
 
 class CS1237:
     _gain = {1: 0, 2: 1, 64: 2, 128: 3}
-
     _rate = {10: 0, 40: 1, 640: 2, 1280: 3}
 
     def __init__(self, clock, data, gain=64, rate=10, channel=0):
@@ -49,99 +48,81 @@ class CS1237:
     def __call__(self):
         return self.read()
 
-    def __write_bit(self, value):
-        self.clock(1)
-        self.data(1 if value != 0 else 0)
-        self.clock(0)
+    def __write_bits(self, value, mask):
+        clock = self.clock
+        data = self.data
+        while mask != 0:
+            clock(1)
+            data(1 if (value & mask) != 0 else 0)
+            clock(0)
+            mask >>= 1
 
-    def __read_bit(self):
+    def __read_bits(self, bits=1):
         # duplicate the clock high call to extend the positive pulse
-        self.clock(1)
-        self.clock(1)
-        self.clock(0)
-        return self.data()
+        clock = self.clock
+        data = self.data
+        value = 0
+        for _ in range(bits):
+            clock(1)
+            clock(1)
+            clock(0)
+            value = (value << 1) | data()
+        return value
 
     def __write_status(self):
         # get the config write status bits
-        write_status = (self.__read_bit() << 1) | self.__read_bit()
-        self.__read_bit()
-        return write_status
+        return self.__read_bits(3) >> 1
 
     def __write_cmd(self, cmd):
-        # apply clock bits 25..27
-        self.__write_status()
-        # clock bits 28 and 29, telling that a command follows
-        self.__read_bit()
-        self.__read_bit()
-        # write the command word
+        # clock bits 25 and 29, telling that a command follows
+        clock = self.clock
+        for _ in range(5):
+            clock(1)
+            clock(1)
+            clock(0)
+        # write the command word + 1 extra clock cycle
         self.data.init(mode=Pin.OUT)
-        for j in range(7):
-            self.__write_bit(cmd & 0x40)
-            cmd <<= 1
-        # write gap bit 37
-        self.__write_bit(1)
+        self.__write_bits(cmd << 1, 0x80)
 
     def __write_config(self, config):
-        value = self.read()  # read value
+        value = self.read()  # get the ADC value
         self.__write_cmd(_CMD_WRITE)
-        # write the configuration byte
-        for j in range(8):
-            self.__write_bit(config & 0x80)
-            config <<= 1
-        # wait one clock cycle
+        # write the configuration byte + the 46th clock cycle
+        self.__write_bits(config << 1, 0x100)
         self.data.init(mode=Pin.IN)
-        self.__read_bit()
-        time.sleep_ms(100)
         return value
 
     def __read_config(self):
-        value = self.read()  # read value
+        value = self.read()  # get the ADC value
         self.__write_cmd(_CMD_READ)
         self.data.init(mode=Pin.IN)
-        config = 0
-        # read the configuration byte
-        for j in range(8):
-            config = (config << 1) | self.__read_bit()
-        # wait one clock cycle
-        self.__read_bit()
-        return config, value
+        # read the configuration byte + 1 extra clock cycle
+        # And return both config and value
+        return self.__read_bits(9) >> 1, value
 
-    # For best performace do not use __read_bit() here and use
-    # local copies of the clock and data pin objects.
-    def __read_cb(self, data):
-        if self.__do_sample:
-            self.data.irq(handler=None)
-            clock = self.clock
-            result = 0
-            for j in range(24):
-                # duplicate the clock high call to extend the positive pulse
-                clock(1)
-                clock(1)
-                clock(0)
-                # shift in data
-                result = (result << 1) | data()
-            self.__result = result
-            self.__do_sample = False
+    def __drdy_cb(self, data):
+        self.data.irq(handler=None)
+        self.__drdy = True
 
     def read(self):
-        # set up the trigger for conversion enable.
-        self.__result = 0
-        self.__do_sample = True
-        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__read_cb)
-        # wait for the sampling being done
+        # Set up the trigger for conversion enable.
+        self.__drdy = False
+        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__drdy_cb)
+        # Wait for the DRDY event
         for _ in range(5000):
-            if self.__do_sample == False:
+            if self.__drdy is True:
                 break
-            time.sleep_us(100)
+            time.sleep_us(50)
         else:
-            self.__do_sample = False
             self.data.irq(handler=None)
             raise OSError("Sensor does not respond")
-        # check the sign.
-        if self.__result > 0x7FFFFF:
-            self.__result -= 0x1000000
+        # Get the data.
+        result = self.__read_bits(24)
+        # Check the sign.
+        if result > 0x7FFFFF:
+            result -= 0x1000000
 
-        return self.__result
+        return result
 
     def get_config(self):
         config, _ = self.__read_config()
@@ -168,8 +149,8 @@ class CS1237:
             if not 0 <= channel <= 3:
                 raise ValueError("Invalid channel")
             self.channel = channel
-        self.__do_sample = False
-        self.__write_config(self.rate << 4 | self.gain << 2 | self.channel)
+        config = self.rate << 4 | self.gain << 2 | self.channel
+        self.__write_config(config)
 
     def calibrate_temperature(self, temp, ref_value=None):
         self.ref_temp = temp
