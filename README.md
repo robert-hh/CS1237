@@ -53,10 +53,10 @@ values, and configuring the device may fail. Then only a power cycle
 will reset the device. Since the current consumption of the CS1237 is
 low, it can be supplied by a GPIO output, making power cycling easy.  
 
-According to the test, Teensy 4.x and PYBD SF6 work fine at a rate
-of 1280. The RP2350, SAMD51 and Renesas RA6M2 work fine at a rate at 640
-and can still be configured back.  
-RP2040, ESP32, ESP8266, nrf52, SAMD21 and W600 can be configured once for a rate
+According to the test, Teensy 4.x, RP2350 and PYBD SF6 work fine at a rate
+of 1280. The ESP32, RP2040, SAMD51 and Renesas RA6M2 work fine
+at a rate at 640 and can still be configured back.  
+ESP8266, nrf52, SAMD21 and W600 can be configured once for a rate
 of 640, but cannot reset back to a lower rate and do not support
 temperature reading when set to the 640 rate.
 
