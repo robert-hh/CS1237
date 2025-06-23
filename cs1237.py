@@ -29,7 +29,6 @@ _CMD_WRITE = const(0x65)
 
 class CS1237:
     _gain = {1: 0, 2: 1, 64: 2, 128: 3}
-
     _rate = {10: 0, 40: 1, 640: 2, 1280: 3}
 
     def __init__(self, clock, data, gain=64, rate=10, channel=0):
@@ -48,13 +47,6 @@ class CS1237:
 
     def __call__(self):
         return self.read()
-
-    def __clocks(self, count):
-        clock = self.clock
-        for _ in range(count):
-            clock(1)
-            clock(1)
-            clock(0)
 
     def __write_bits(self, value, mask):
         clock = self.clock
@@ -83,31 +75,30 @@ class CS1237:
 
     def __write_cmd(self, cmd):
         # clock bits 25 and 29, telling that a command follows
-        self.__clocks(5)
-        # write the command word
+        clock = self.clock
+        for _ in range(5):
+            clock(1)
+            clock(1)
+            clock(0)
+        # write the command word + 1 extra clock cycle
         self.data.init(mode=Pin.OUT)
-        self.__write_bits(cmd, 0x40)
-        self.__write_bits(1,  0x01)
+        self.__write_bits(cmd << 1, 0x80)
 
     def __write_config(self, config):
-        value = self.read()  # read value
+        value = self.read()  # get the ADC value
         self.__write_cmd(_CMD_WRITE)
-        # write the configuration byte
-        self.__write_bits(config, 0x80)
+        # write the configuration byte + the 46th clock cycle
+        self.__write_bits(config << 1, 0x100)
         self.data.init(mode=Pin.IN)
-        self.__clocks(1)
         return value
 
     def __read_config(self):
-        value = self.read()  # read value
+        value = self.read()  # get the ADC value
         self.__write_cmd(_CMD_READ)
         self.data.init(mode=Pin.IN)
-        config = 0
-        # read the configuration byte
-        config = self.__read_bits(8)
-        # wait one clock cycle
-        self.__clocks(1)
-        return config, value
+        # read the configuration byte + 1 extra clock cycle
+        # And return both config and value
+        return self.__read_bits(9) >> 1, value
 
     def __read_cb(self, data):
         if self.__do_sample:
