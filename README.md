@@ -1,8 +1,9 @@
-# CS1237: MicroPython class for the CS1237 ADC
+# CS1237: MicroPython classes for the CS1237 and CS1238 ADC
 
-This is a short and simple class for the CS1237 ADC. It supports reading
+This is a short and simple class for the CS1237 and CS1238 ADC. It supports reading
 the ADC value, reading the temperature and configuring the various device
-modes.
+modes. In the following document, the CS1237 or cs1237 is used for both CS1237 and CS1238, unless
+otherwise stated.
 
 Tested with MicroPython ports for RP2040, STM32, SAMD, i.MX RT (e.g. Teensy),
 ESP32, ESP8266, NRF52840 and W600. Approximate times for reading an ADC value:
@@ -29,6 +30,7 @@ It can be configured, but refuses to work. The polling driver works.
 ## Constructor
 
 ### cs1237 = CS1237(clock_pin, data_pin[, gain=1, rate=10, channel=0])
+### cs1238 = CS1238(clock_pin, data_pin[, gain=1, rate=10, channel=0])
 
 This is the GPIO constructor. data_pin and clock_pin are the pin objects
 of the GPIO pins used for the communication. The arguments for gain, rate and channel
@@ -43,9 +45,9 @@ Accepted values for **gain** are 1, 2, 64, 128 and for
 **rate** are 10, 40, 640, 1280.
 Channel values are:
 
-- 0 : ADC reading
-- 1 : Chip retention (sleep?)
-- 2 : Temperature reading
+- 0 : ADC channel 0
+- 1 : CS1238: ADC channel 1; CS1237: Chip standby
+- 2 : Temperature
 - 3 : Internal short of the input
 
 At data rates of 640 and 1280 reading with a slow MCU may return wrong
@@ -155,4 +157,6 @@ cs1237.calibrate_temperature(20.0, 769000)
 - **cs1237_poll.py** CS1237 driver use polling to detect the sync pulse. The
 driver may fail on slow devices like ESP8266, SAMD21 or W600.
 - **README.md**  Documentation file.
+- **package.json** Helper file for the mip installer.
+- **LICENSE** Separate License file.
 

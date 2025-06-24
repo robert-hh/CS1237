@@ -43,7 +43,7 @@ class CS1237:
         self.ref_temp = 20
 
     def __repr__(self):
-        return "CS1237(gain={}, rate={}, channel={})".format(*self.get_config())
+        return "{}(gain={}, rate={}, channel={})".format(self.__qualname__, *self.get_config())
 
     def __call__(self):
         return self.read()
@@ -178,3 +178,7 @@ class CS1237:
 
     def power_up(self):
         self.clock(0)
+
+
+class CS1238(CS1237):
+    pass
