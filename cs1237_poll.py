@@ -113,7 +113,7 @@ class CS1237:
         for _ in range(5000):
             if not data():
                 break
-            time.sleep_us(100)
+            time.sleep_us(50)
         else:
             raise OSError("Sensor does not respond")
         result = self.__read_bits(24)

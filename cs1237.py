@@ -100,31 +100,29 @@ class CS1237:
         # And return both config and value
         return self.__read_bits(9) >> 1, value
 
-    def __read_cb(self, data):
-        if self.__do_sample:
-            self.data.irq(handler=None)
-            self.__result = self.__read_bits(24)
-            self.__do_sample = False
+    def __drdy_cb(self, data):
+        self.data.irq(handler=None)
+        self.__drdy = True
 
     def read(self):
-        # set up the trigger for conversion enable.
-        self.__result = 0
-        self.__do_sample = True
-        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__read_cb)
-        # wait for the sampling being done
+        # Set up the trigger for conversion enable.
+        self.__drdy = False
+        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__drdy_cb)
+        # Wait for the DRDY event
         for _ in range(5000):
-            if self.__do_sample == False:
+            if self.__drdy is True:
                 break
             time.sleep_us(50)
         else:
-            self.__do_sample = False
             self.data.irq(handler=None)
             raise OSError("Sensor does not respond")
-        # check the sign.
-        if self.__result > 0x7FFFFF:
-            self.__result -= 0x1000000
+        # Get the data.
+        result = self.__read_bits(24)
+        # Check the sign.
+        if result > 0x7FFFFF:
+            result -= 0x1000000
 
-        return self.__result
+        return result
 
     def get_config(self):
         config, _ = self.__read_config()
