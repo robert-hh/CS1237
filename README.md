@@ -31,10 +31,14 @@ It can be configured, but refuses to work. The polling driver works.
 
 ### cs1237 = CS1237(clock_pin, data_pin[, gain=1, rate=10, channel=0])
 ### cs1238 = CS1238(clock_pin, data_pin[, gain=1, rate=10, channel=0])
+### cs1237 = CS1237P(clock_pin, data_pin[, gain=1, rate=10, channel=0])
+### cs1238 = CS1238P(clock_pin, data_pin[, gain=1, rate=10, channel=0])
 
 This is the GPIO constructor. data_pin and clock_pin are the pin objects
 of the GPIO pins used for the communication. The arguments for gain, rate and channel
 are optional and can later be re-configured using the init() method.
+The classes with the "P" suffix use polling to detect the conversion ready pulse.
+Otherwise a IRQ is used.
 
 ## Methods
 
@@ -155,7 +159,8 @@ cs1237.calibrate_temperature(20.0, 769000)
 
 - **cs1237.py** CS1237 driver using Interrupts.
 - **cs1237_poll.py** CS1237 driver use polling to detect the sync pulse. The
-driver may fail on slow devices like ESP8266, SAMD21 or W600.
+driver may fail on slow devices like ESP8266, SAMD21 or W600. Replaced by
+the classes CS1237P and CS1238P of cs1237.py.
 - **README.md**  Documentation file.
 - **package.json** Helper file for the mip installer.
 - **LICENSE** Separate License file.

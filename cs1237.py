@@ -184,3 +184,30 @@ class CS1237:
 class CS1238(CS1237):
     pass
 
+class CS1237P(CS1237):
+
+    def read(self):
+        data = self.data
+        # wait for the trigger pulse
+        start = time.ticks_ms()
+        while time.ticks_diff(time.ticks_ms(), start) < 200:
+            if data():
+                break
+        else:
+            raise OSError("No trigger pulse found")
+        for _ in range(5000):
+            if not data():
+                break
+            time.sleep_us(50)
+        else:
+            raise OSError("Sensor does not respond")
+        result = self.__read_bits(24)
+        # check the sign.
+        if result > 0x7FFFFF:
+            result -= 0x1000000
+
+        return result
+
+class CS1238P(CS1237P):
+    pass
+
