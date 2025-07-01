@@ -9,6 +9,7 @@ Tested with MicroPython ports for RP2040, STM32, SAMD, i.MX RT (e.g. Teensy),
 ESP32, ESP8266, NRF52840 and W600. Approximate times for reading an ADC value:
 
 - RP2040 at 125 MHz: 450 µs  
+- RP2040 at 125 MHz using PIO: 50 µs  
 - PYBD SF6 at 192 MHz: 250 µs  
 - Teensy 4.1 at 600 MHz: 100 µs  
 - SAMD51 at 120 MHz: 450 µs   
@@ -29,14 +30,16 @@ It can be configured, but refuses to work. The polling driver works.
 
 ## Constructor
 
-### cs1237 = CS1237(clock_pin, data_pin[, gain=1, rate=10, channel=0])
-### cs1238 = CS1238(clock_pin, data_pin[, gain=1, rate=10, channel=0])
+### cs1237 = CS1237(clock_pin, data_pin[, gain=1, rate=10, channel=0, pio=0])
+### cs1238 = CS1238(clock_pin, data_pin[, gain=1, rate=10, channel=0, pio=0])
 ### cs1237 = CS1237P(clock_pin, data_pin[, gain=1, rate=10, channel=0])
 ### cs1238 = CS1238P(clock_pin, data_pin[, gain=1, rate=10, channel=0])
 
 This is the GPIO constructor. data_pin and clock_pin are the pin objects
 of the GPIO pins used for the communication. The arguments for gain, rate and channel
 are optional and can later be re-configured using the init() method.
+The argument for pio is only available at the RP2 PIO variant. Suitable values
+are 0 and 1. The CS1237 statemachine has a size of 32 words, so it fills a single PIO.
 The classes with the "P" suffix use polling to detect the conversion ready pulse.
 Otherwise a IRQ is used.
 
@@ -61,7 +64,8 @@ low, it can be supplied by a GPIO output, making power cycling easy.
 
 According to the test, Teensy 4.x, RP2350 and PYBD SF6 work fine at a rate
 of 1280. The ESP32, RP2040, SAMD51 and Renesas RA6M2 work fine
-at a rate at 640 and can still be configured back.  
+at a rate at 640 and can still be configured back. The PIO version of the RP2
+driver works fine at all rates.  
 ESP8266, nrf52, SAMD21 and W600 can be configured once for a rate
 of 640, but cannot reset back to a lower rate and do not support
 temperature reading when set to the 640 rate.
@@ -92,18 +96,18 @@ reference value is read from the sensor.
 The reference value can be obtained by configuring the sensor for temperature
 reading and calling cs1237.read().
 
-### cs1237.temperature(temp)
+### cs1237.temperature()
 
 Return the actual temperature reading. The reference point has to be
 configured before using calibrate_temperature().
 
 ### cs1237.power_down()
 
-Set the CS1237 device to sleep mode.
+Set the CS1237 device to sleep mode. Not supported by the cs1237 PIO variant.
 
 ### cs1237.power_up()
 
-Switch the CS1237 on again.
+Switch the CS1237 on again. Not supported by the cs1237 PIO variant.
 
 
 More methods exists but are used only internally by the CS1237 class.
@@ -158,6 +162,7 @@ cs1237.calibrate_temperature(20.0, 769000)
 ## Files
 
 - **cs1237.py** CS1237 driver using Interrupts.
+- **cs1237_pio.py** CS1237 driver using the PIO state machine. Available for RP2040 and RP2350.
 - **cs1237_poll.py** CS1237 driver use polling to detect the sync pulse. The
 driver may fail on slow devices like ESP8266, SAMD21 or W600. Replaced by
 the classes CS1237P and CS1238P of cs1237.py.
