@@ -37,7 +37,7 @@ It can be configured, but refuses to work. The polling driver works.
 
 This is the GPIO constructor. data_pin and clock_pin are the pin objects
 of the GPIO pins used for the communication. The arguments for gain, rate and channel
-are optional and can later be re-configured using the init() method.
+are optional and can later be re-configured using the config() method.
 The argument for pio is only available at the RP2 PIO variant. Suitable values
 are 0 and 1. The CS1237 statemachine has a size of 32 words, so it fills a single PIO.
 The classes with the "P" suffix use polling to detect the conversion ready pulse.
@@ -45,7 +45,7 @@ Otherwise a IRQ is used.
 
 ## Methods
 
-### cs1237.init(gain=None, rate=None, channel=None)
+### cs1237.config(gain=None, rate=None, channel=None)
 
 Configures or re-configures the ADC. All arguments are optional.
 Accepted values for **gain** are 1, 2, 64, 128 and for
@@ -138,7 +138,7 @@ value = cs1237.read()
 value = cs1237()
 
 # change the gain
-cs1237.init(gain=2)
+cs1237.config(gain=2)
 value = cs1237.read()
 
 # return the ADC settings

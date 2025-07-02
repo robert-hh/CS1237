@@ -37,10 +37,11 @@ class CS1237:
         self.data.init(mode=Pin.IN)
         self.clock.init(mode=Pin.OUT)
         self.clock(0)
-        self.init(gain, rate, channel)
+        self.config(gain, rate, channel)
         # pre-set some values for temperature calibration.
         self.ref_value = 769000
         self.ref_temp = 20
+        self.init = self.config
 
     def __repr__(self):
         return "{}(gain={}, rate={}, channel={})".format(self.__qualname__, *self.get_config())
@@ -135,7 +136,7 @@ class CS1237:
         self.read()  ## dummy read value
         return self.__write_status() >> 1
 
-    def init(self, gain=None, rate=None, channel=None):
+    def config(self, gain=None, rate=None, channel=None):
         if gain is not None:
             if gain not in self._gain.keys():
                 raise ValueError("Invalid Gain")

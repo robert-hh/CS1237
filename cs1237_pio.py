@@ -40,10 +40,11 @@ class CS1237:
         self.cs1237_sm = rp2.StateMachine(pio * 4, self.cs1237_sm_pio,
             freq=3_000_000, in_base=data, out_base=data, set_base=data, sideset_base=clock)
         self.cs1237_sm.irq(handler=self.__irq_sm_finished, trigger=1)
-        self.init(gain, rate, channel)
+        self.config(gain, rate, channel)
         # pre-set some values for temperature calibration.
         self.ref_value = 769000
         self.ref_temp = 20
+        self.init = self.config
 
     def __repr__(self):
         return "{}(gain={}, rate={}, channel={})".format(self.__qualname__, *self.get_config())
@@ -197,7 +198,7 @@ class CS1237:
     def config_status(self):
         return self.__write_status() >> 1
 
-    def init(self, gain=None, rate=None, channel=None):
+    def config(self, gain=None, rate=None, channel=None):
         if gain is not None:
             if gain not in self._gain.keys():
                 raise ValueError("Invalid Gain")
