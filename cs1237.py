@@ -42,6 +42,7 @@ class CS1237:
         self.ref_value = 769000
         self.ref_temp = 20
         self.init = self.config
+        self.buffer_full = False
 
     def __repr__(self):
         return "{}(gain={}, rate={}, channel={})".format(self.__qualname__, *self.get_config())
@@ -126,6 +127,30 @@ class CS1237:
 
         return result
 
+    def __buffer_cb(self, data):
+        self.data.irq(handler=None)
+        # Check the sign later when it's time to do so
+        if self.buffer_index < self.buffer_size:
+            self.buffer[self.buffer_index] = self.__read_bits(24)
+            self.buffer_index += 1
+            self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb)
+        else:
+            self.buffer_full = True
+
+    def read_buffered(self, buffer):
+        self.buffer = buffer
+        self.buffer_size = len(buffer)
+        self.buffer_index = 0
+        self.buffer_full = False
+        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb)
+
+    def data_avail(self):
+        if self.buffer_full is True:
+            for i in range(self.buffer_size):
+                if self.buffer[i] > 0x7FFFFF:
+                    self.buffer[i] -= 0x1000000
+        return self.buffer_full
+
     def get_config(self):
         config, _ = self.__read_config()
         return (
@@ -208,6 +233,17 @@ class CS1237P(CS1237):
             result -= 0x1000000
 
         return result
+
+    def read_buffered(self, buffer):
+        self.buffer_full = False
+        self.buffer = buffer
+        self.buffer_size = len(buffer)
+        for i in range(self.buffer_size):
+            self.buffer[i] = self.read()
+        self.buffer_full = True
+
+    def data_avail(self):
+        return self.buffer_full
 
 class CS1238P(CS1237P):
     pass

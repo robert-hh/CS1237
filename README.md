@@ -74,8 +74,20 @@ temperature reading when set to the 640 rate.
 ### result = cs1237.read()
 ### result = cs1237()
 
-Returns the actual reading of the ADC or temperature.
+Returns the actual reading of the ADC.
 
+### cs1237.read_buffered(buffer):
+Read ADC data into a buffer. The buffer must be an array of a 4 byte
+signed data type like "i". Using the standard driver the call will
+return immediately, while the data is collected. One can use the
+method data_avail() to test, whether the data acquisition is finished.
+The data in the buffer is **NOT** sign corrected until data_avail() has
+been called.  
+The polling driver will not return until the data acquisition is finished.
+
+### ready = cs1237.data_avail():
+Tell, whether the data acquisition is finished. If so, the method returns True.
+A call to buffer_avail() will as well correct the sign of the data.
 
 ### cs1237.get_config()
 
@@ -156,6 +168,15 @@ temp_celsius = cs1237.temperature()
 # Calibrate the temperature reading using a known set point
 # which has to be determined only once for a device.
 cs1237.calibrate_temperature(20.0, 769000)
+
+# Read a buffer of data
+import array
+buffer = array.array(bytearray(256 * 4))
+cs1237.read_buffered(buffer)
+while cs1237.data_avail() is False:
+    pass
+
+# The last call to data_avail() has taken as well care for the data sign bit.
 
 ```
 

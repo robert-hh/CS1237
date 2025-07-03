@@ -39,7 +39,6 @@ class CS1237:
         self.cs1237_sm_finished = False
         self.cs1237_sm = rp2.StateMachine(pio * 4, self.cs1237_sm_pio,
             freq=3_000_000, in_base=data, out_base=data, set_base=data, sideset_base=clock)
-        self.cs1237_sm.irq(handler=self.__irq_sm_finished, trigger=1)
         self.config(gain, rate, channel)
         # pre-set some values for temperature calibration.
         self.ref_value = 769000
@@ -70,9 +69,9 @@ class CS1237:
         # 1: read data and write status once
         # 2: Write the configuration
         # 3: Read the configuration
-        set(pindirs, 0)       .side(0)      # Initial set pin direction.
-        pull()                .side(0)      # get the mode 
+        pull()                .side(0)      # get the mode
         mov(y, osr)           .side(0)      # put it into y
+        set(pindirs, 0)       .side(0)      # Initial set pin direction.
         label("start_over")
 # Wait for a high level = start of the DRDY pulse
         wait(1, pin, 0)       .side(0)
@@ -93,12 +92,13 @@ class CS1237:
         irq(rel(0))           .side(0)      # Signal available data
 # Wait for a low level == data line inactive, needed to avoid double read
         wait(0, pin, 0)       .side(0)
-        jmp("start_over")     .side(0)      # Mode is still 0, go on, but on a slow pace
-                                            # Wait 24 clock cycles allowing the CS1237 to settle.
+        jmp("start_over")     .side(0)      # Mode is still 0
+
 # Test mode is now 0
         label("test_config")
         jmp(not_y, "end")      .side(0)     # If y is now 0, end the state machine
         jmp(y_dec, "do_config").side(0)     # Just decrement
+
 # now send command + write or read config
         label("do_config")
         pull()                .side(0)      # get the command byte into OSR
@@ -148,6 +148,7 @@ class CS1237:
 
     def __read_data_status(self):
         self.cs1237_sm_finished = False
+        self.cs1237_sm.irq(handler=self.__irq_sm_finished, hard=True)
         self.cs1237_sm.restart()
         self.cs1237_sm.put(1);  # set the command argument
         self.cs1237_sm.active(1)
@@ -162,6 +163,7 @@ class CS1237:
 
     def __write_config(self, config):
         self.cs1237_sm_finished = False
+        self.cs1237_sm.irq(handler=self.__irq_sm_finished, hard=True)
         self.cs1237_sm.restart()
         self.cs1237_sm.put(2);  # set the command argument
         self.cs1237_sm.put(_CMD_WRITE << 25 | config << 16)  # cmd + config
@@ -178,6 +180,7 @@ class CS1237:
 
     def __read_config(self):
         self.cs1237_sm_finished = False
+        self.cs1237_sm.irq(handler=self.__irq_sm_finished, hard=True)
         self.cs1237_sm.restart()
         self.cs1237_sm.put(3);  # set the command argument
         self.cs1237_sm.put(_CMD_READ << 25)  # set the command word
@@ -198,6 +201,33 @@ class CS1237:
         if result > 0x7FFFFF:
             result -= 0x1000000
         return result
+
+    def __irq_buffer(self, sm):
+        # Check the sign later when it's time to do so
+        if self.buffer_index < self.buffer_size:
+            self.buffer[self.buffer_index] = sm.get(None, 4)
+            self.buffer_index += 1
+            if self.buffer_index >= self.buffer_size:
+                sm.active(0)
+                self.buffer_full = True
+                sm.irq(handler=None)
+    
+    def read_buffered(self, buffer):
+        self.buffer = buffer
+        self.buffer_size = len(buffer)
+        self.buffer_index = 0
+        self.buffer_full = False
+        self.cs1237_sm.irq(handler=self.__irq_buffer, hard=True)
+        self.cs1237_sm.restart()
+        self.cs1237_sm.put(0);  # set the command argument
+        self.cs1237_sm.active(1)  # An go off
+
+    def data_avail(self):
+        if self.buffer_full is True:
+            for i in range(self.buffer_size):
+                if self.buffer[i] > 0x7FFFFF:
+                    self.buffer[i] -= 0x1000000
+        return self.buffer_full
 
     def get_config(self):
         config, _ = self.__read_config()
