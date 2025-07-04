@@ -30,18 +30,18 @@ It can be configured, but refuses to work. The polling driver works.
 
 ## Constructor
 
-### cs1237 = CS1237(clock_pin, data_pin[, gain=1, rate=10, channel=0, pio=0])
-### cs1238 = CS1238(clock_pin, data_pin[, gain=1, rate=10, channel=0, pio=0])
+### cs1237 = CS1237(clock_pin, data_pin[, gain=1, rate=10, channel=0, statemachine=0])
+### cs1238 = CS1238(clock_pin, data_pin[, gain=1, rate=10, channel=0, statemachine=0])
 ### cs1237 = CS1237P(clock_pin, data_pin[, gain=1, rate=10, channel=0])
 ### cs1238 = CS1238P(clock_pin, data_pin[, gain=1, rate=10, channel=0])
 
 This is the GPIO constructor. data_pin and clock_pin are the pin objects
 of the GPIO pins used for the communication. The arguments for gain, rate and channel
 are optional and can later be re-configured using the config() method.
-The argument for pio is only available at the RP2 PIO variant. Suitable values
-are 0 and 1. The CS1237 statemachine has a size of 32 words, so it fills a single PIO.
-The classes with the "P" suffix use polling to detect the conversion ready pulse.
-Otherwise a IRQ is used.
+The argument for statemachine is only available at the RP2 PIO variant. Suitable values
+are 0 though 7, which will be mapped to 0 and 4. The CS1237 statemachine
+has a size of 30 words. It almost fills a single PIO. The classes with
+the "P" suffix use polling to detect the conversion ready pulse.
 
 ## Methods
 
@@ -81,23 +81,22 @@ Read ADC data into a buffer. The buffer must be an array of a 4 byte
 signed data type like "i". Using the standard driver the call will
 return immediately, while the data is collected. One can use the
 method data_avail() to test, whether the data acquisition is finished.
-The data in the buffer is **NOT** sign corrected until data_avail() has
-been called.  
+The data in the buffer is **NOT** sign corrected and in the correct range
+until data_avail() has been called.  
 The polling driver will not return until the data acquisition is finished.
 
 ### ready = cs1237.data_avail():
 Tell, whether the data acquisition is finished. If so, the method returns True.
-A call to buffer_avail() will as well correct the sign of the data.
+A call to buffer_avail() will as well correct the sign of the data and in
+case of PIO it will shift the data into the proper range.
 
 ### cs1237.get_config()
 
 Returns the tuple of (gain, rate, channel) as read back from the ADC.
 
-
 ### cs1237.config_status()
 
 Returns True if a new configuration has been properly updated.
-
 
 ### cs1237.calibrate_temperature(temp [, reference_value])
 

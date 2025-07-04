@@ -27,17 +27,29 @@ import rp2
 _CMD_READ = const(0x56)
 _CMD_WRITE = const(0x65)
 
-
 class CS1237:
     _gain = {1: 0, 2: 1, 64: 2, 128: 3}
     _rate = {10: 0, 40: 1, 640: 2, 1280: 3}
 
-    def __init__(self, clock, data, gain=64, rate=10, channel=0, pio=0):
+    def __init__(self, clock, data, gain=64, rate=10, channel=0, statemachine=0):
         self.clock = clock
         self.data = data
         self.timeout = 1000
+        self.statemachine = statemachine & 0b1100   # force to 0, 4, 8 and 12
+        # set up DMA
+        self.pio_dma = rp2.DMA()
+        self.pio_ctrl = self.pio_dma.pack_ctrl(
+            size=2,
+            inc_read=False,
+            inc_write=True,
+            ring_size = 0,  # no wrapping
+            treq_sel = self.statemachine * 2 + 4,  # 4-7 or 12-15
+            irq_quiet = False, # generate an IRQ
+            bswap = False   # Do not swap bytes (?)
+        )
+
         self.cs1237_sm_finished = False
-        self.cs1237_sm = rp2.StateMachine(pio * 4, self.cs1237_sm_pio,
+        self.cs1237_sm = rp2.StateMachine(self.statemachine, self.cs1237_sm_pio,
             freq=3_000_000, in_base=data, out_base=data, set_base=data, sideset_base=clock)
         self.config(gain, rate, channel)
         # pre-set some values for temperature calibration.
@@ -46,7 +58,7 @@ class CS1237:
         self.init = self.config
 
     def __repr__(self):
-        return "{}(gain={}, rate={}, channel={})".format(self.__qualname__, *self.get_config())
+        return "{}(gain={}, rate={}, channel={}, statemachine={})".format(self.__qualname__, *self.get_config(), self.statemachine)
 
     def __call__(self):
         return self.read()
@@ -73,6 +85,8 @@ class CS1237:
         mov(y, osr)           .side(0)      # put it into y
         set(pindirs, 0)       .side(0)      # Initial set pin direction.
         label("start_over")
+# Wait for a low level == data line inactive, needed to avoid a false start
+        wait(0, pin, 0)       .side(0)
 # Wait for a high level = start of the DRDY pulse
         wait(1, pin, 0)       .side(0)
 # Wait for a low level = DRDY signal
@@ -89,9 +103,6 @@ class CS1237:
 # Done with data + status
         jmp(y_dec, "test_config").side(0)   # Mode is non-zero, decrement it and go on
         set(y, 0)             .side(0)      # Mode was zero, set it back to 0
-        irq(rel(0))           .side(0)      # Signal available data
-# Wait for a low level == data line inactive, needed to avoid double read
-        wait(0, pin, 0)       .side(0)
         jmp("start_over")     .side(0)      # Mode is still 0
 
 # Test mode is now 0
@@ -112,6 +123,7 @@ class CS1237:
         label("cmd_write_config")
         out(pins, 1)          .side(1)[1]   # shift out one bit.
         jmp(x_dec, "cmd_write_config").side(0)[1]    # and go for another bit
+        set(pindirs, 0)       .side(0)      # set back to input
         jmp("end")            .side(0)
 
         label("read_config")
@@ -171,8 +183,6 @@ class CS1237:
         self.__wait_for_completion()
         value = self.cs1237_sm.get(None, 4)
         self.cs1237_sm.active(0)
-        # reset pindir after writing
-        self.cs1237_sm.exec("set(pindirs, 0).side(0)")
         # Check the sign.
         if value > 0x7FFFFF:
             value -= 0x1000000
@@ -202,31 +212,33 @@ class CS1237:
             result -= 0x1000000
         return result
 
-    def __irq_buffer(self, sm):
-        # Check the sign later when it's time to do so
-        if self.buffer_index < self.buffer_size:
-            self.buffer[self.buffer_index] = sm.get(None, 4)
-            self.buffer_index += 1
-            if self.buffer_index >= self.buffer_size:
-                sm.active(0)
-                self.buffer_full = True
-                sm.irq(handler=None)
+    def __irq_dma_finished(self, sm):
+        # Shift and sign check later when it's time to do so
+        self.cs1237_sm.active(False)
+        self.pio_dma.irq(handler=None)
+        self.buffer_full = True
+        # clear the sm output fifo in case of a delayed call
+        while self.cs1237_sm.rx_fifo() > 0:
+            self.cs1237_sm.get()
     
     def read_buffered(self, buffer):
         self.buffer = buffer
-        self.buffer_size = len(buffer)
-        self.buffer_index = 0
         self.buffer_full = False
-        self.cs1237_sm.irq(handler=self.__irq_buffer, hard=True)
+        self.buffer_fixed = False
+        self.pio_dma.config(read=self.cs1237_sm, write=buffer, count=len(buffer), ctrl=self.pio_ctrl)
+        self.pio_dma.irq(handler=self.__irq_dma_finished, hard=True)
+        self.pio_dma.active(True)
         self.cs1237_sm.restart()
         self.cs1237_sm.put(0);  # set the command argument
         self.cs1237_sm.active(1)  # An go off
 
     def data_avail(self):
-        if self.buffer_full is True:
-            for i in range(self.buffer_size):
+        if self.buffer_full is True and self.buffer_fixed is False:
+            for i in range(len(self.buffer)):
+                self.buffer[i] >>= 4
                 if self.buffer[i] > 0x7FFFFF:
                     self.buffer[i] -= 0x1000000
+            self.buffer_fixed = True
         return self.buffer_full
 
     def get_config(self):
