@@ -38,6 +38,12 @@ class CS1237:
         self.data.init(mode=Pin.IN)
         self.clock.init(mode=Pin.OUT)
         self.clock(0)
+        # determine the number of attempts to find the trigger pulse
+        start = time.ticks_us()
+        for _ in range(10):
+            temp = data()
+        spent = time.ticks_diff(time.ticks_us(), start)
+        self.__wait_loop = 4_000_000 // spent
         self.config(gain, rate, channel)
         # pre-set some values for temperature calibration.
         self.ref_value = 769000
@@ -110,9 +116,9 @@ class CS1237:
     def read(self):
         # Set up the trigger for conversion enable.
         self.__drdy = False
-        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__drdy_cb, hard=True)
+        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__drdy_cb)
         # Wait for the DRDY event
-        for _ in range(5000):
+        for _ in range(20000):
             if self.__drdy is True:
                 break
             time.sleep_us(50)
@@ -140,16 +146,16 @@ class CS1237:
         if self.buffer_index < self.buffer_size:
             self.buffer[self.buffer_index] = self.__read_bits(24)
             self.buffer_index += 1
-            self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb, hard=False)
+            self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb)
         else:
             micropython.schedule(self.align_buffer, self.buffer)
 
     def read_buffered(self, buffer):
-        CS1237.data_acquired = False
+        self.data_acquired = False
         self.buffer = buffer
         self.buffer_size = len(buffer)
         self.buffer_index = 0
-        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb, hard=False)
+        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb)
 
     def get_config(self):
         config, _ = self.__read_config()
@@ -216,7 +222,7 @@ class CS1237P(CS1237):
         data = self.data
         # wait for the trigger pulse
         start = time.ticks_ms()
-        while time.ticks_diff(time.ticks_ms(), start) < 200:
+        for _ in range(self.__wait_loop):
             if data():
                 break
         else:

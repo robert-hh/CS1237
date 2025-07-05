@@ -54,7 +54,7 @@ class CS1237:
 
         self.cs1237_sm_finished = False
         self.cs1237_sm = rp2.StateMachine(self.statemachine, self.cs1237_sm_pio,
-            freq=3_000_000, in_base=data, out_base=data, set_base=data, sideset_base=clock)
+            freq=1_000_000, in_base=data, out_base=data, set_base=data, sideset_base=clock)
         self.cs1237_sm.irq(handler=self.__irq_sm_finished, hard=True)
         self.config(gain, rate, channel)
         # pre-set some values for temperature calibration.
