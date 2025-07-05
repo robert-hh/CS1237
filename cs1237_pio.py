@@ -23,6 +23,7 @@
 from machine import Pin
 import time
 import rp2
+import micropython
 
 _CMD_READ = const(0x56)
 _CMD_WRITE = const(0x65)
@@ -35,6 +36,7 @@ class CS1237:
         self.clock = clock
         self.data = data
         self.timeout = 1000
+        CS1237.data_acquired = False
         self.statemachine = statemachine & 0b1100   # force to 0, 4, 8 and 12
         # set up DMA
         self.pio_dma = rp2.DMA()
@@ -47,10 +49,13 @@ class CS1237:
             irq_quiet = False, # generate an IRQ
             bswap = False   # Do not swap bytes (?)
         )
+        self.pio_dma.irq(handler=self.__irq_dma_finished, hard=True)
+
 
         self.cs1237_sm_finished = False
         self.cs1237_sm = rp2.StateMachine(self.statemachine, self.cs1237_sm_pio,
             freq=3_000_000, in_base=data, out_base=data, set_base=data, sideset_base=clock)
+        self.cs1237_sm.irq(handler=self.__irq_sm_finished, hard=True)
         self.config(gain, rate, channel)
         # pre-set some values for temperature calibration.
         self.ref_value = 769000
@@ -157,7 +162,6 @@ class CS1237:
 
     def __read_data_status(self):
         self.cs1237_sm_finished = False
-        self.cs1237_sm.irq(handler=self.__irq_sm_finished, hard=True)
         self.cs1237_sm.restart()
         self.cs1237_sm.put(1);  # set the command argument
         self.cs1237_sm.active(1)
@@ -172,7 +176,6 @@ class CS1237:
 
     def __write_config(self, config):
         self.cs1237_sm_finished = False
-        self.cs1237_sm.irq(handler=self.__irq_sm_finished, hard=True)
         self.cs1237_sm.restart()
         self.cs1237_sm.put(2);  # set the command argument
         self.cs1237_sm.put(_CMD_WRITE << 25 | config << 16)  # cmd + config
@@ -187,7 +190,6 @@ class CS1237:
 
     def __read_config(self):
         self.cs1237_sm_finished = False
-        self.cs1237_sm.irq(handler=self.__irq_sm_finished, hard=True)
         self.cs1237_sm.restart()
         self.cs1237_sm.put(3);  # set the command argument
         self.cs1237_sm.put(_CMD_READ << 25)  # set the command word
@@ -209,34 +211,31 @@ class CS1237:
             result -= 0x1000000
         return result
 
+    @staticmethod
+    def align_buffer(buffer):
+        for i in range(len(buffer)):
+            buffer[i] >>= 2
+            if buffer[i] > 0x7FFFFF:
+                buffer[i] -= 0x1000000
+        CS1237.data_acquired = True
+
     def __irq_dma_finished(self, sm):
         # Shift and sign check later when it's time to do so
         self.cs1237_sm.active(False)
         self.pio_dma.irq(handler=None)
-        self.buffer_full = True
         # clear the sm output fifo in case of a delayed call
         while self.cs1237_sm.rx_fifo() > 0:
             self.cs1237_sm.get()
+        micropython.schedule(CS1237.align_buffer, self.buffer)
     
     def read_buffered(self, buffer):
         self.buffer = buffer
-        self.buffer_full = False
-        self.buffer_fixed = False
+        CS1237.data_acquired = False
         self.pio_dma.config(read=self.cs1237_sm, write=buffer, count=len(buffer), ctrl=self.pio_ctrl)
-        self.pio_dma.irq(handler=self.__irq_dma_finished, hard=True)
         self.pio_dma.active(True)
         self.cs1237_sm.restart()
         self.cs1237_sm.put(0);  # set the command argument
         self.cs1237_sm.active(1)  # An go off
-
-    def data_avail(self):
-        if self.buffer_full is True and self.buffer_fixed is False:
-            for i in range(len(self.buffer)):
-                self.buffer[i] >>= 2
-                if self.buffer[i] > 0x7FFFFF:
-                    self.buffer[i] -= 0x1000000
-            self.buffer_fixed = True
-        return self.buffer_full
 
     def get_config(self):
         config, _ = self.__read_config()

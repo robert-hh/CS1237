@@ -80,15 +80,10 @@ Returns the actual reading of the ADC.
 Read ADC data into a buffer. The buffer must be an array of a 4 byte
 signed data type like "i". Using the standard driver the call will
 return immediately, while the data is collected. One can use the
-method data_avail() to test, whether the data acquisition is finished.
-The data in the buffer is **NOT** sign corrected and in the correct range
-until data_avail() has been called.  
+flag data_acquired of the cs1237 object to test, whether the data
+acquisition is finished. The data in the buffer is **NOT** sign
+corrected and in the correct range until data_acquired is True.  
 The polling driver will not return until the data acquisition is finished.
-
-### ready = cs1237.data_avail():
-Tell, whether the data acquisition is finished. If so, the method returns True.
-A call to buffer_avail() will as well correct the sign of the data and in
-case of PIO it will shift the data into the proper range.
 
 ### cs1237.get_config()
 
@@ -172,10 +167,8 @@ cs1237.calibrate_temperature(20.0, 769000)
 import array
 buffer = array.array(bytearray(256 * 4))
 cs1237.read_buffered(buffer)
-while cs1237.data_avail() is False:
+while cs1237.data_acquired is False:
     pass
-
-# The last call to data_avail() has taken as well care for the data sign bit.
 
 ```
 

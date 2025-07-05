@@ -22,6 +22,7 @@
 
 from machine import Pin
 import time
+import micropython
 
 _CMD_READ = const(0x56)
 _CMD_WRITE = const(0x65)
@@ -109,7 +110,7 @@ class CS1237:
     def read(self):
         # Set up the trigger for conversion enable.
         self.__drdy = False
-        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__drdy_cb)
+        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__drdy_cb, hard=True)
         # Wait for the DRDY event
         for _ in range(5000):
             if self.__drdy is True:
@@ -127,29 +128,28 @@ class CS1237:
 
         return result
 
+    def align_buffer(self, buffer):
+        for i in range(len(buffer)):
+            if buffer[i] > 0x7FFFFF:
+                buffer[i] -= 0x1000000
+        self.data_acquired = True
+
     def __buffer_cb(self, data):
         self.data.irq(handler=None)
         # Check the sign later when it's time to do so
         if self.buffer_index < self.buffer_size:
             self.buffer[self.buffer_index] = self.__read_bits(24)
             self.buffer_index += 1
-            self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb)
+            self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb, hard=False)
         else:
-            self.buffer_full = True
+            micropython.schedule(self.align_buffer, self.buffer)
 
     def read_buffered(self, buffer):
+        CS1237.data_acquired = False
         self.buffer = buffer
         self.buffer_size = len(buffer)
         self.buffer_index = 0
-        self.buffer_full = False
-        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb)
-
-    def data_avail(self):
-        if self.buffer_full is True:
-            for i in range(self.buffer_size):
-                if self.buffer[i] > 0x7FFFFF:
-                    self.buffer[i] -= 0x1000000
-        return self.buffer_full
+        self.data.irq(trigger=Pin.IRQ_FALLING, handler=self.__buffer_cb, hard=False)
 
     def get_config(self):
         config, _ = self.__read_config()
@@ -235,15 +235,12 @@ class CS1237P(CS1237):
         return result
 
     def read_buffered(self, buffer):
-        self.buffer_full = False
+        self.data_acquired = False
         self.buffer = buffer
         self.buffer_size = len(buffer)
         for i in range(self.buffer_size):
             self.buffer[i] = self.read()
-        self.buffer_full = True
-
-    def data_avail(self):
-        return self.buffer_full
+        self.data_acquired = True
 
 class CS1238P(CS1237P):
     pass
