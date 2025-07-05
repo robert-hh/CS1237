@@ -247,4 +247,3 @@ class CS1237P(CS1237):
 
 class CS1238P(CS1237P):
     pass
-

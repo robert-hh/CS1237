@@ -69,7 +69,7 @@ class CS1237:
         out_shiftdir=rp2.PIO.SHIFT_LEFT,
         autopull=False,
         autopush=True,
-        push_thresh=28,
+        push_thresh=26,
         out_init=(rp2.PIO.OUT_LOW,),
         set_init=(rp2.PIO.OUT_HIGH,),
         sideset_init=(rp2.PIO.OUT_LOW,)
@@ -85,21 +85,18 @@ class CS1237:
         mov(y, osr)           .side(0)      # put it into y
         set(pindirs, 0)       .side(0)      # Initial set pin direction.
         label("start_over")
-# Wait for a low level == data line inactive, needed to avoid a false start
-        wait(0, pin, 0)       .side(0)
 # Wait for a high level = start of the DRDY pulse
         wait(1, pin, 0)       .side(0)
 # Wait for a low level = DRDY signal
         wait(0, pin, 0)       .side(0)
 # Get the data
-        set (x, 27)           .side(1)[1]   # 24 bit data + 4 status, 27 to be set
+        set (x, 25)           .side(1)[1]   # 24 bit data + 2 status, 25 to be set
         label("read_data")                  # because of postdecrement
         in_(pins, 1)          .side(0)[1]   # shift in one bit
         jmp(x_dec, "read_data").side(1)[1]  # and go for another bit, which
-                                            # sets the trailing 29th pulse as well
-                                            # which is not shifted into the data
+                                            # sets the 27th pulse as well
                                             # the result was pushed automatically, which is
-                                            # 24 bit data || 2 bit status || 2 gap bits
+                                            # 24 bit data || 2 bit status
 # Done with data + status
         jmp(y_dec, "test_config").side(0)   # Mode is non-zero, decrement it and go on
         set(y, 0)             .side(0)      # Mode was zero, set it back to 0
@@ -108,13 +105,13 @@ class CS1237:
 # Test mode is now 0
         label("test_config")
         jmp(not_y, "end")      .side(0)     # If y is now 0, end the state machine
-        jmp(y_dec, "do_config").side(0)     # Just decrement
+        jmp(y_dec, "do_config").side(1)[1]  # Just decrement and issue clk pulse 28
 
 # now send command + write or read config
         label("do_config")
-        pull()                .side(0)      # get the command byte into OSR
+        pull()                .side(0)[1]   # get the command byte into OSR
                                             # properly formatted:
-        set(pindirs, 1)       .side(0)      # set to output
+        set(pindirs, 1)       .side(1)[1]   # set to output and isseu clk pulse 29
         jmp(y_dec, "read_config").side(0)   # If y is still != 0, read config
 
         set (x, 16)           .side(0)[1]   # 7 pulses command + 1 gap pulse +
@@ -171,7 +168,7 @@ class CS1237:
 
     def __write_status(self):
         # get the config write status bits
-        return (self.__read_data_status() >> 2) & 0x03
+        return self.__read_data_status() & 0x03
 
     def __write_config(self, config):
         self.cs1237_sm_finished = False
@@ -181,7 +178,7 @@ class CS1237:
         self.cs1237_sm.put(_CMD_WRITE << 25 | config << 16)  # cmd + config
         self.cs1237_sm.active(1)
         self.__wait_for_completion()
-        value = self.cs1237_sm.get(None, 4)
+        value = self.cs1237_sm.get(None, 2)
         self.cs1237_sm.active(0)
         # Check the sign.
         if value > 0x7FFFFF:
@@ -196,7 +193,7 @@ class CS1237:
         self.cs1237_sm.put(_CMD_READ << 25)  # set the command word
         self.cs1237_sm.active(1)
         self.__wait_for_completion()
-        value = self.cs1237_sm.get(None, 4)
+        value = self.cs1237_sm.get(None, 2)
         config = self.cs1237_sm.get()
         self.cs1237_sm.active(0)
         # Check the sign.
@@ -206,7 +203,7 @@ class CS1237:
 
     def read(self):
         # Get the data.
-        result = self.__read_data_status() >> 4
+        result = self.__read_data_status() >> 2
         # Check the sign.
         if result > 0x7FFFFF:
             result -= 0x1000000
@@ -235,7 +232,7 @@ class CS1237:
     def data_avail(self):
         if self.buffer_full is True and self.buffer_fixed is False:
             for i in range(len(self.buffer)):
-                self.buffer[i] >>= 4
+                self.buffer[i] >>= 2
                 if self.buffer[i] > 0x7FFFFF:
                     self.buffer[i] -= 0x1000000
             self.buffer_fixed = True
@@ -291,4 +288,3 @@ class CS1237:
 
 class CS1238(CS1237):
     pass
-
