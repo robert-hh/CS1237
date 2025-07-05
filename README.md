@@ -10,22 +10,19 @@ ESP32, ESP8266, NRF52840 and W600. Approximate times for reading an ADC value:
 
 - RP2040 at 125 MHz: 450 µs  
 - RP2040 at 125 MHz using PIO: 50 µs  
-- PYBD SF6 at 192 MHz: 250 µs  
-- Teensy 4.1 at 600 MHz: 100 µs  
-- SAMD51 at 120 MHz: 450 µs   
-- SAMD21 at 48 MHz: 1.2 ms   
-- ESP32 at 160 MHz: 900 µs  
+- PYBD SF6 at 192 MHz: 230 µs  
+- Teensy 4.1 at 600 MHz: 80 µs  
+- SAMD51 at 120 MHz: 400 µs   
+- SAMD21 at 48 MHz: 1.4 ms   
+- ESP32 at 160 MHz: 550 µs  
 - ESP8266 at 80 MHz: 1.2 ms  
-- NRF52840: 800µs.  
+- NRF52840: 950 µs.  
 - Renesas RA6M2 at 120 MHz: 600µs
-- W600 at 80 MHz: 900 µs  
+- W600 at 80 MHz: 950 µs  
 
-The nrf port has the problem that the device cannot be configured when using the IRQ based driver.
-NRF52840 based devices have worked in the test
-using the polling driver. Otherwise the CS1237 operates at it's default
-mode, which is gain=128, rate=10, channel=0.
-pin.irq() seems not to work at the Renesas port, at least not with the tested EV-RA6M2 board.
-It can be configured, but refuses to work. The polling driver works.
+pin.irq() seems not to work at the Renesas port, at least not with
+the tested EV-RA6M2 board. It can be configured, but refuses to work.
+The polling driver works.
 
 
 ## Constructor
@@ -41,7 +38,7 @@ are optional and can later be re-configured using the config() method.
 The argument for statemachine is only available at the RP2 PIO variant. Suitable values
 are 0 though 7, which will be mapped to 0 and 4. The CS1237 statemachine
 has a size of 30 words. It almost fills a single PIO. The classes with
-the "P" suffix use polling to detect the conversion ready pulse.
+the "P" suffix use polling to detect the conversion ready signal.
 
 ## Methods
 
@@ -62,13 +59,15 @@ values, and configuring the device may fail. Then only a power cycle
 will reset the device. Since the current consumption of the CS1237 is
 low, it can be supplied by a GPIO output, making power cycling easy.  
 
-According to the test, Teensy 4.x, RP2350 and PYBD SF6 work fine at a rate
-of 1280. The ESP32, RP2040, SAMD51 and Renesas RA6M2 work fine
-at a rate at 640 and can still be configured back. The PIO version of the RP2
-driver works fine at all rates.  
+According to the test, Teensy 4.x, RP2350, PYBD SF6 and the PIO version
+of the RP2 boards work fine at a rate of 1280. The ESP32, RP2040, SAMD51
+and Renesas RA6M2 work fine at a rate at 640 and can still be configured
+back.   
 ESP8266, nrf52, SAMD21 and W600 can be configured once for a rate
 of 640, but cannot reset back to a lower rate and do not support
 temperature reading when set to the 640 rate.
+SAMD21 can be configured for a rate of 640, but will do a buffered read
+at a rate of 320, unless configured for a machine.freq() of 52MHz.
 
 
 ### result = cs1237.read()
@@ -76,7 +75,8 @@ temperature reading when set to the 640 rate.
 
 Returns the actual reading of the ADC.
 
-### cs1237.read_buffered(buffer):
+### cs1237.read_buffered(buffer)
+
 Read ADC data into a buffer. The buffer must be an array of a 4 byte
 signed data type like "i". Using the standard driver the call will
 return immediately, while the data is collected. One can use the
@@ -84,6 +84,9 @@ flag data_acquired of the cs1237 object to test, whether the data
 acquisition is finished. The data in the buffer is **NOT** sign
 corrected and in the correct range until data_acquired is True.  
 The polling driver will not return until the data acquisition is finished.
+
+cs1237.read_buffered() cannot be used with the NRF port in standard mode,
+which uses IRQ. The polling mode variant works with read_buffered().
 
 ### cs1237.get_config()
 
